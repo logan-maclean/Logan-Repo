@@ -420,6 +420,30 @@ def build_certificate_doc(name: str, holders: list[dict]) -> dict:
     }
 
 
+def build_competency_doc(name: str, holders: list[dict]) -> dict:
+    """One doc per unique competency (internal sign-off), listing every
+    worker signed off on it. Powers 'who is signed off to operate the
+    forklift?' style queries in Glean."""
+    lines = [
+        f"Competency: {name}",
+        "",
+        f"Signed off for {len(holders)} worker(s):",
+        "",
+    ]
+    for h in sorted(holders, key=lambda x: x["name"]):
+        lines.append(f"  - {h['name']} ({h['position']}, {h['location']})")
+    return {
+        "id": stable_id("competency", name),
+        "datasource": GLEAN_DATASOURCE,
+        "objectType": "Competency",
+        "title": f"Competency: {name}",
+        "viewURL": f"{WORKHUB_WEB_BASE}/admin/competencies",
+        "body": {"mimeType": "text/plain", "textContent": "\n".join(lines)},
+        "updatedAt": now_epoch(),
+        "permissions": COMPANY_VISIBLE,
+    }
+
+
 # ---------------------------------------------------------------------------
 # AGGREGATION -- invert worker->policy data into policy->worker
 # ---------------------------------------------------------------------------
@@ -446,6 +470,15 @@ def invert_certificates(workers: list[dict]) -> dict[str, list[dict]]:
     for w in workers:
         person = _person_summary(w["basic"])
         for c in w["certificates"]:
+            out[c].append(person)
+    return out
+
+
+def invert_competencies(workers: list[dict]) -> dict[str, list[dict]]:
+    out: dict[str, list[dict]] = defaultdict(list)
+    for w in workers:
+        person = _person_summary(w["basic"])
+        for c in w["competencies"]:
             out[c].append(person)
     return out
 
@@ -534,6 +567,13 @@ def run_test(limit: int) -> None:
     for name in list(cmap.keys())[:3]:
         _print_doc("certification", build_certificate_doc(name, cmap[name]))
 
+    kmap = invert_competencies(workers)
+    print(f"\n=== Competency docs (showing first 3 of {len(kmap)} from sample) ===")
+    if not kmap:
+        print("(none in this sample)")
+    for name in list(kmap.keys())[:3]:
+        _print_doc("competency", build_competency_doc(name, kmap[name]))
+
     pmap = invert_policies(workers)
     print(f"\n=== Policy docs (showing first 3 of {len(pmap)} from sample) ===")
     for name in list(pmap.keys())[:3]:
@@ -566,15 +606,18 @@ def run_sync(limit: int | None = None) -> None:
     log.info("=" * 60)
     worker_docs = [build_worker_doc(w) for w in workers]
     cmap = invert_certificates(workers)
+    kmap = invert_competencies(workers)
     pmap = invert_policies(workers)
     qmap = invert_procedures(workers)
     cert_docs = [build_certificate_doc(n, h) for n, h in cmap.items()]
+    comp_docs = [build_competency_doc(n, h) for n, h in kmap.items()]
     policy_docs = [build_policy_doc(n, a) for n, a in pmap.items()]
     proc_docs = [build_procedure_doc(n, r) for n, r in qmap.items()]
-    all_docs = worker_docs + cert_docs + policy_docs + proc_docs
+    all_docs = worker_docs + cert_docs + comp_docs + policy_docs + proc_docs
     log.info(
-        "Built %d docs (%d worker, %d certification, %d policy, %d procedure)",
-        len(all_docs), len(worker_docs), len(cert_docs), len(policy_docs), len(proc_docs),
+        "Built %d docs (%d worker, %d certification, %d competency, %d policy, %d procedure)",
+        len(all_docs), len(worker_docs), len(cert_docs), len(comp_docs),
+        len(policy_docs), len(proc_docs),
     )
 
     log.info("=" * 60)
@@ -586,6 +629,7 @@ def run_sync(limit: int | None = None) -> None:
     log.info("Sync complete. Indexed %d documents into Glean.", len(all_docs))
     log.info("  - %d worker compliance cards", len(worker_docs))
     log.info("  - %d certification cards", len(cert_docs))
+    log.info("  - %d competency cards", len(comp_docs))
     log.info("  - %d policy cards", len(policy_docs))
     log.info("  - %d procedure cards", len(proc_docs))
     log.info("=" * 60)
