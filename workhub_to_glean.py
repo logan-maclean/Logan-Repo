@@ -12,14 +12,16 @@ WHAT IT DOES (in plain English):
         - Worker Reviewed Procedures -> reviewed safety procedures
         Builds one "Worker Card" Glean document per worker.
 
-    Pass 2 - Inverts the policy + procedure data:
-        - Builds one "Policy Card" per unique policy
-        - Builds one "Procedure Card" per unique procedure
+    Pass 2 - Inverts the per-worker data into 4 roster-style doc types:
+        - "Certification Card" per unique cert    (who holds it)
+        - "Competency Card"    per unique sign-off (who's signed off)
+        - "Policy Card"        per unique policy   (who acknowledged)
+        - "Procedure Card"     per unique procedure (who reviewed)
 
     Pass 3 - Pushes everything to Glean using the bulk indexing API. Bulk
         indexing is an atomic replace -- documents not present in this
         upload are removed on commit, so departed workers and renamed
-        policies/procedures drop out automatically.
+        certs/competencies/policies/procedures drop out automatically.
 
 REQUIREMENTS:
     pip install requests python-dotenv
